@@ -93,6 +93,7 @@ func initialise() {
 	quit = false
 	// load the game graphics
 	loadGraphics()
+	initialiseMyBatPosition()
 }
 
 // GameMainLoop controls the game. It performs three manin tasks. The first task
@@ -117,24 +118,103 @@ func cleanup() {
 // to the users input, for example, the direction that the user wants to move their
 // bat in.
 func getInput() {
-	// check for the window close button first
-	if checkQuit() { // same as if checkQuit() == true
-		// The user has clicked the window's close button to quit the game.
-		// There is no point in checking the other input states becuase they
-		// will not be used. The function can stop here.
-		return
+	var event sdl.Event
+	event = sdl.PollEvent()
+	if event != nil {
+		if isQuitEvent(event) {
+			quit = true
+		}
+		if isKeyDownEvent(event) {
+			if isKeyUp(event) {
+				myBatY = myBatY - myBatH/4
+				// make sure we do not go off the top of the screen!
+				if myBatY < 0 {
+					myBatY = 0
+				}
+			}
+			if isKeyDown(event) {
+				myBatY = myBatY + myBatH/4
+				// make sure we do not go off the bottom of the screen
+				// we have to account for the heigh of the bat when we do this
+				// becase myBatY is the Y coordinate of the top right of the bat,
+				// but the bottom right (or left) will go of the bottom of the
+				// screen first.
+				if myBatY+myBatH > windowHeight {
+					myBatY = windowHeight - myBatH
+				}
+			}
+		}
+		/*
+			switch event.(type) {
+			//		case *sdl.QuitEvent:
+			//			quit = true
+			case *sdl.KeyDownEvent:
+				// which key was presses?
+				var keyDownEvt *sdl.KeyDownEvent
+				var ok bool
+				keyDownEvt, ok = event.(*sdl.KeyDownEvent)
+				if !ok {
+					panic("KeyDownEvent type assertion failed!")
+				}
+				switch keyDownEvt.Keysym.Sym {
+				case sdl.K_UP:
+					myBatY = myBatY - myBatH/4
+					// make sure we do not go off the top of the screen!
+					if myBatY < 0 {
+						myBatY = 0
+					}
+				case sdl.K_DOWN:
+					myBatY = myBatY + myBatH/4
+					// make sure we do not go off the bottom of the screen
+					// we have to account for the heigh of the bat when we do this
+					// becase myBatY is the Y coordinate of the top right of the bat,
+					// but the bottom right (or left) will go of the bottom of the
+					// screen first.
+					if myBatY+myBatH > windowHeight {
+						myBatY = windowHeight - myBatH
+					}
+				}
+			}
+		*/
 	}
+}
+
+func isQuitEvent(event sdl.Event) bool {
+	var ok bool
+	_, ok = event.(*sdl.QuitEvent)
+	return ok
+}
+
+func isKeyDownEvent(event sdl.Event) bool {
+	var ok bool
+	_, ok = event.(*sdl.KeyDownEvent)
+	return ok
+}
+
+func isKeyUp(event sdl.Event) bool {
+	var keyDownEvt *sdl.KeyDownEvent
+	var ok bool
+	keyDownEvt, ok = event.(*sdl.KeyDownEvent)
+	if !ok {
+		panic("KeyDownEvent type assertion failed!")
+	}
+	return (keyDownEvt.Keysym.Sym == sdl.K_UP)
+}
+
+func isKeyDown(event sdl.Event) bool {
+	var keyDownEvt *sdl.KeyDownEvent
+	var ok bool
+	keyDownEvt, ok = event.(*sdl.KeyDownEvent)
+	if !ok {
+		panic("KeyDownEvent type assertion failed!")
+	}
+	return (keyDownEvt.Keysym.Sym == sdl.K_DOWN)
 }
 
 // UpdateGameState updates the game state variables based on the user input and
 // the rules of the game.
 func updateState() {
-	updateMyBatPosition()
-}
 
-func updateMyBatPosition() {
-	myBatX = 102 - 12
-	myBatY = 768/2 - myBatH/2
 }
 
 // Render updates the screen, based on the new positions of the bats and the ball.
@@ -173,6 +253,11 @@ func loadBatGraphic(filename string) *sdl.Texture {
 		panic(err)
 	}
 	return bat
+}
+
+func initialiseMyBatPosition() {
+	myBatX = windowWidth/10 - myBatW/2
+	myBatY = windowHeight/2 - myBatH/2
 }
 
 func setSizeOfMyBat() {
@@ -228,6 +313,9 @@ func checkQuit() bool {
 		}
 	}
 	return quit
+}
+
+func getPlayersInput() {
 }
 
 // Create the graphics window using the SDl library or crash trying
