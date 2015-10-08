@@ -4,7 +4,10 @@ import (
 	// This is the graphics library we are going to use. It is called the
 	// Simple Direct Media Library. SDL for short. We need this to create the
 	// window and to provide the drawing functions we need.
+	"fmt"
+
 	"github.com/veandco/go-sdl2/sdl"
+	img "github.com/veandco/go-sdl2/sdl_image"
 )
 
 // These are the variables for the graphics library
@@ -17,11 +20,30 @@ var window *sdl.Window
 // that actually does the drawing
 var renderer *sdl.Renderer
 
+// These variabels are important. They are the width and height of the window
+// If you change these you will change the size of the image
+var windowWidth int
+var windowHeight int
+
+// Image is a reusable surface used to load the game graohics.
+var image *sdl.Surface
+
+// myBat is the gaphic used to represent the the players bat
+var myBat *sdl.Texture
+
 // ---- Game State variables ----
 // The quit flag this is used to control the main game loop.
 // If quit is true then the user wants to finish the game. This will
 // break the main game loop.
 var quit bool
+
+// my bats x and y position on the screen in pixels
+var myBatX int
+var myBatY int
+
+// my bats width and height. This is the width and height of the grapic in pixels
+var myBatW int
+var myBatH int
 
 // The programs main function
 func main() {
@@ -34,10 +56,6 @@ func main() {
 	// the program exits for us. We don't have to remember to put this at the end!
 	defer sdl.Quit()
 
-	// These variabels are important. They are the width and height of the window
-	// If you change these you will change the size of the image
-	var windowWidth int
-	var windowHeight int
 	// if you want to change these try 800 for the width and 600 for the height
 	windowWidth = 1024
 	windowHeight = 768
@@ -60,11 +78,12 @@ func main() {
 	renderer.Clear()
 	// ---- This is the end of Owen's graphics setup code ----
 
+	// defer any cleanup actions
+	defer cleanup()
 	// initialise the games variables.
 	initialise()
 	// now start the main game loop of the game.
 	gameMainLoop()
-
 }
 
 // Initialise sets the inital values of the game state variables.
@@ -72,6 +91,8 @@ func main() {
 func initialise() {
 	// initially set the quit flag to false.
 	quit = false
+	// load the game graphics
+	loadGraphics()
 }
 
 // GameMainLoop controls the game. It performs three manin tasks. The first task
@@ -83,6 +104,12 @@ func gameMainLoop() {
 		getInput()
 		updateState()
 		render()
+	}
+}
+
+func cleanup() {
+	if myBat != nil {
+		myBat.Destroy()
 	}
 }
 
@@ -102,13 +129,89 @@ func getInput() {
 // UpdateGameState updates the game state variables based on the user input and
 // the rules of the game.
 func updateState() {
+	updateMyBatPosition()
+}
 
+func updateMyBatPosition() {
+	myBatX = 102 - 12
+	myBatY = 768/2 - myBatH/2
 }
 
 // Render updates the screen, based on the new positions of the bats and the ball.
 func render() {
+
+	renderer.Clear()
+	renderMyBat()
 	// Show the empty window window we have just created.
 	renderer.Present()
+}
+
+func loadGraphics() {
+	loadMyBatGraphic()
+	setSizeOfMyBat()
+}
+
+func loadMyBatGraphic() {
+	myBat = loadBatGraphic("./assets/graphics/bat.png")
+}
+
+func loadBatGraphic(filename string) *sdl.Texture {
+	var err error
+
+	image, err = img.Load(filename)
+	if err != nil {
+		fmt.Print("Failed to load PNG: ")
+		fmt.Println(err)
+		panic(err)
+	}
+	defer image.Free()
+	var bat *sdl.Texture
+	bat, err = renderer.CreateTextureFromSurface(image)
+	if err != nil {
+		fmt.Print("Failed to create texture: ")
+		fmt.Println(err)
+		panic(err)
+	}
+	return bat
+}
+
+func setSizeOfMyBat() {
+	var w, h int32
+	var err error
+	_, _, w, h, err = myBat.Query()
+	if err != nil {
+		fmt.Print("Failed to query texture: ")
+		fmt.Println(err)
+		panic(err)
+	}
+	myBatW = int(w)
+	myBatH = int(h)
+}
+
+func renderMyBat() {
+
+	var src, dst sdl.Rect
+
+	src.X = 0
+	src.Y = 0
+	src.W = int32(myBatW)
+	src.H = int32(myBatH)
+
+	dst.X = int32(myBatX)
+	dst.Y = int32(myBatY)
+	dst.W = int32(myBatW)
+	dst.H = int32(myBatH)
+
+	renderer.Clear()
+	renderer.SetDrawColor(255, 0, 0, 255)
+	var r sdl.Rect
+	r.X = 0
+	r.Y = 0
+	r.W = int32(windowWidth)
+	r.H = int32(windowHeight)
+	renderer.FillRect(&r)
+	renderer.Copy(myBat, &src, &dst)
+
 }
 
 // CheckQuit checks if the user has clicked the window's close button.
