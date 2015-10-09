@@ -5,7 +5,9 @@ import (
 	// Simple Direct Media Library. SDL for short. We need this to create the
 	// window and to provide the drawing functions we need.
 	"fmt"
+	"math"
 
+	"github.com/gophercoders/random"
 	"github.com/veandco/go-sdl2/sdl"
 	img "github.com/veandco/go-sdl2/sdl_image"
 )
@@ -30,8 +32,16 @@ var image *sdl.Surface
 
 // myBat is the gaphic used to represent the the players bat
 var myBat *sdl.Texture
+var ball *sdl.Texture
 
 // ---- Game State variables ----
+
+// the balls speed in pixels per second
+// This should never change during the game. We can make sure of this
+// if we use define a constant value. Go provents us form changing the
+// value of a constant - it's an illegal action - it breaks the rile of go.
+const BallSpeed = 550
+
 // The quit flag this is used to control the main game loop.
 // If quit is true then the user wants to finish the game. This will
 // break the main game loop.
@@ -44,6 +54,23 @@ var myBatY int
 // my bats width and height. This is the width and height of the grapic in pixels
 var myBatW int
 var myBatH int
+
+// the balls x and y position on the screen in pixels
+// We don't store these as int types! We want to know the exact position, so
+// we can record fractions of a pixel. We will convert the number to int type
+// just before we draw the ball on screen.
+var ballX float64
+var ballY float64
+
+// the balls width and height. This is the width and height of the grapic in pixels
+var ballW int
+var ballH int
+
+// the balls direction in x (horizontal) and y (vertical) across the screen
+// Again we want to know the exact direction of travel, so we store these as
+// float64 types not ints.
+var ballDirX float64
+var ballDirY float64
 
 // The programs main function
 func main() {
@@ -94,6 +121,69 @@ func initialise() {
 	// load the game graphics
 	loadGraphics()
 	initialiseMyBatPosition()
+	initialiseBallPosition()
+	initialiseBallDirection()
+}
+
+func initialiseBallDirection() {
+	// pick some random numbers to determine if the ball will move up or down
+	// and left or right initially.
+	var n int
+	n = random.GetRandomNumberInRange(1, 10)
+	var up bool
+	if isOddNumber(n) {
+		up = true // we want the ball to move up - decreasing Y coordinate
+	} else {
+		up = false // we want the ball to move down - increasing y coordinate
+	}
+
+	n = random.GetRandomNumberInRange(1, 10)
+	var left bool
+	if isOddNumber(n) {
+		left = true // we want the ball to move left - decreasing X coordiiate
+	} else {
+		left = false //we want the ball to move right - increasing X coordinate
+	}
+	// pick two random mumbers for the initial direction
+	ballDirX = float64(random.GetRandomNumberInRange(1, 10))
+	ballDirY = float64(random.GetRandomNumberInRange(1, 10))
+	// are we moving left?
+	if left {
+		ballDirX = ballDirX * -1
+	} // otherwise the ball is moving right so ballDirX should be positive
+	// are we moving up?
+	if up {
+		// yes - make the number negative
+		ballDirY = ballDirY * -1
+	} // otherwise the ball is moving dwon so ballDirY should be positive
+	// the vector now needs to be normalised
+	setBallDirection(ballDirX, ballDirY)
+}
+
+func setBallDirection(newDirectionX, newDirectionY float64) {
+	// nornalise the direction vector
+	var length float64
+	// To mornalise the vector multiply each side by itself, and then add then
+	// results together
+	length = float64(newDirectionX*newDirectionX + newDirectionY*newDirectionY)
+	// then take the square root
+	length = math.Sqrt(length)
+	// We want to keep the balls speed constant so
+	// the balls new position (in each direction) is the balls speed (in each direction)
+	// multiplied by _scalled_ new direction (in each direction)
+	ballDirX = BallSpeed * (newDirectionX / length)
+	ballDirY = BallSpeed * (newDirectionY / length)
+}
+
+func isOddNumber(number int) bool {
+	// use the modulus operator (%) to divide the number by two and
+	// return the _remainder_
+	// An even number has no remainder so false is returned.
+	// An odd number has a remainder so true is returned
+	if number%2 == 0 {
+		return false
+	}
+	return true
 }
 
 // GameMainLoop controls the game. It performs three manin tasks. The first task
@@ -111,6 +201,9 @@ func gameMainLoop() {
 func cleanup() {
 	if myBat != nil {
 		myBat.Destroy()
+	}
+	if ball != nil {
+		ball.Destroy()
 	}
 }
 
@@ -144,38 +237,6 @@ func getInput() {
 				}
 			}
 		}
-		/*
-			switch event.(type) {
-			//		case *sdl.QuitEvent:
-			//			quit = true
-			case *sdl.KeyDownEvent:
-				// which key was presses?
-				var keyDownEvt *sdl.KeyDownEvent
-				var ok bool
-				keyDownEvt, ok = event.(*sdl.KeyDownEvent)
-				if !ok {
-					panic("KeyDownEvent type assertion failed!")
-				}
-				switch keyDownEvt.Keysym.Sym {
-				case sdl.K_UP:
-					myBatY = myBatY - myBatH/4
-					// make sure we do not go off the top of the screen!
-					if myBatY < 0 {
-						myBatY = 0
-					}
-				case sdl.K_DOWN:
-					myBatY = myBatY + myBatH/4
-					// make sure we do not go off the bottom of the screen
-					// we have to account for the heigh of the bat when we do this
-					// becase myBatY is the Y coordinate of the top right of the bat,
-					// but the bottom right (or left) will go of the bottom of the
-					// screen first.
-					if myBatY+myBatH > windowHeight {
-						myBatY = windowHeight - myBatH
-					}
-				}
-			}
-		*/
 	}
 }
 
@@ -214,28 +275,61 @@ func isKeyDown(event sdl.Event) bool {
 // UpdateGameState updates the game state variables based on the user input and
 // the rules of the game.
 func updateState() {
+	// update the balls state
+	updateBallState()
+}
 
+func updateBallState() {
+	// just update the position.....
+	var frameTime = float64(1) / float64(60)
+	// work out how far the ball moved during the last "frame"
+	// Easy - just the direction times the frameTime
+	var xDelta = ballDirX * frameTime
+	var yDelta = ballDirY * frameTime
+	// the balls new position is the last position + the deltafor this frame
+	ballX = ballX + xDelta
+	ballY = ballY + yDelta
 }
 
 // Render updates the screen, based on the new positions of the bats and the ball.
 func render() {
+	var fps uint32
+	fps = 60
+	var delay uint32
+	delay = 1000 / fps
+
+	var frameStart uint32
+	frameStart = sdl.GetTicks()
 
 	renderer.Clear()
 	renderMyBat()
+	renderBall()
 	// Show the empty window window we have just created.
 	renderer.Present()
+
+	var frameTime uint32
+	frameTime = sdl.GetTicks() - frameStart
+	if frameTime < delay {
+		sdl.Delay(delay - frameTime)
+	}
 }
 
 func loadGraphics() {
 	loadMyBatGraphic()
 	setSizeOfMyBat()
+	loadBallGraphic()
+	setSizeOfBall()
 }
 
 func loadMyBatGraphic() {
-	myBat = loadBatGraphic("./assets/graphics/bat.png")
+	myBat = loadGraphic("./assets/graphics/bat.png")
 }
 
-func loadBatGraphic(filename string) *sdl.Texture {
+func loadBallGraphic() {
+	ball = loadGraphic("./assets/graphics/ball.png")
+}
+
+func loadGraphic(filename string) *sdl.Texture {
 	var err error
 
 	image, err = img.Load(filename)
@@ -245,19 +339,24 @@ func loadBatGraphic(filename string) *sdl.Texture {
 		panic(err)
 	}
 	defer image.Free()
-	var bat *sdl.Texture
-	bat, err = renderer.CreateTextureFromSurface(image)
+	var graphic *sdl.Texture
+	graphic, err = renderer.CreateTextureFromSurface(image)
 	if err != nil {
 		fmt.Print("Failed to create texture: ")
 		fmt.Println(err)
 		panic(err)
 	}
-	return bat
+	return graphic
 }
 
 func initialiseMyBatPosition() {
 	myBatX = windowWidth/10 - myBatW/2
 	myBatY = windowHeight/2 - myBatH/2
+}
+
+func initialiseBallPosition() {
+	ballX = float64(windowWidth/2 - ballW/2)
+	ballY = float64(windowHeight/2 - ballH/2)
 }
 
 func setSizeOfMyBat() {
@@ -271,6 +370,19 @@ func setSizeOfMyBat() {
 	}
 	myBatW = int(w)
 	myBatH = int(h)
+}
+
+func setSizeOfBall() {
+	var w, h int32
+	var err error
+	_, _, w, h, err = ball.Query()
+	if err != nil {
+		fmt.Print("Failed to query texture: ")
+		fmt.Println(err)
+		panic(err)
+	}
+	ballW = int(w)
+	ballH = int(h)
 }
 
 func renderMyBat() {
@@ -287,15 +399,25 @@ func renderMyBat() {
 	dst.W = int32(myBatW)
 	dst.H = int32(myBatH)
 
-	renderer.Clear()
-	renderer.SetDrawColor(255, 0, 0, 255)
-	var r sdl.Rect
-	r.X = 0
-	r.Y = 0
-	r.W = int32(windowWidth)
-	r.H = int32(windowHeight)
-	renderer.FillRect(&r)
 	renderer.Copy(myBat, &src, &dst)
+
+}
+
+func renderBall() {
+
+	var src, dst sdl.Rect
+
+	src.X = 0
+	src.Y = 0
+	src.W = int32(ballW)
+	src.H = int32(ballH)
+
+	dst.X = int32(ballX)
+	dst.Y = int32(ballY)
+	dst.W = int32(ballW)
+	dst.H = int32(ballH)
+
+	renderer.Copy(ball, &src, &dst)
 
 }
 
