@@ -47,6 +47,11 @@ const BallSpeed = 550
 // break the main game loop.
 var quit bool
 
+// The paused flag is used to control if the game is paused.
+// If the paused flag is true then the game is paused. The game will stop moving
+// the ball and both players bats.
+var paused bool
+
 // my bats x and y position on the screen in pixels
 var myBatX int
 var myBatY int
@@ -109,6 +114,8 @@ func main() {
 	defer cleanup()
 	// initialise the games variables.
 	initialise()
+	// render everything initially so that we can see the game before it starts
+	render()
 	// now start the main game loop of the game.
 	gameMainLoop()
 }
@@ -118,6 +125,8 @@ func main() {
 func initialise() {
 	// initially set the quit flag to false.
 	quit = false
+	// initially the game is not paused
+	paused = false
 	// load the game graphics
 	loadGraphics()
 	initialiseMyBatPosition()
@@ -193,7 +202,10 @@ func isOddNumber(number int) bool {
 func gameMainLoop() {
 	for quit == false {
 		getInput()
-		updateState()
+		// if the game is not paused, then we must update the games state
+		if paused == false {
+			updateState()
+		}
 		render()
 	}
 }
@@ -219,6 +231,14 @@ func getInput() {
 		}
 		if isKeyDownEvent(event) {
 			if isKeyUp(event) {
+				// If the game is paused we must iognore the up cursor key.
+				// We do not want to move the players bat up if the game is
+				// paused. We can do this by leaving the getInput function
+				// early, by using the return keyword.
+				if paused == true {
+					return
+				}
+				// if the game is not paused we can process the key press
 				myBatY = myBatY - myBatH/4
 				// make sure we do not go off the top of the screen!
 				if myBatY < 0 {
@@ -226,6 +246,14 @@ func getInput() {
 				}
 			}
 			if isKeyDown(event) {
+				// If the game is paused we must iognore the down cursor key.
+				// We do not want to move the players bat up if the game is
+				// paused. We can do this by leaving the getInput function
+				// early, by using the return keyword.
+				if paused == true {
+					return
+				}
+				// if the game is not paused we can process the key
 				myBatY = myBatY + myBatH/4
 				// make sure we do not go off the bottom of the screen
 				// we have to account for the heigh of the bat when we do this
@@ -234,6 +262,17 @@ func getInput() {
 				// screen first.
 				if myBatY+myBatH > windowHeight {
 					myBatY = windowHeight - myBatH
+				}
+			}
+			// We must always respond to the paused key being pressed.
+			// If the game is running the pause key pauses the game.
+			// But if the game is paused, we must still respond to the paused key.
+			// This is the only way to unpause the game.
+			if isKeyPause(event) {
+				if paused == true {
+					paused = false
+				} else {
+					paused = true
 				}
 			}
 		}
@@ -272,11 +311,22 @@ func isKeyDown(event sdl.Event) bool {
 	return (keyDownEvt.Keysym.Sym == sdl.K_DOWN)
 }
 
+func isKeyPause(event sdl.Event) bool {
+	var keyDownEvt *sdl.KeyDownEvent
+	var ok bool
+	keyDownEvt, ok = event.(*sdl.KeyDownEvent)
+	if !ok {
+		panic("KeyDownEvent type assertion failed!")
+	}
+	return (keyDownEvt.Keysym.Sym == sdl.K_PAUSE)
+}
+
 // UpdateGameState updates the game state variables based on the user input and
 // the rules of the game.
 func updateState() {
 	// update the balls state
 	updateBallState()
+	checkForCollisions()
 }
 
 func updateBallState() {
@@ -286,9 +336,46 @@ func updateBallState() {
 	// Easy - just the direction times the frameTime
 	var xDelta = ballDirX * frameTime
 	var yDelta = ballDirY * frameTime
-	// the balls new position is the last position + the deltafor this frame
+	// the balls new position is the last position + the delta for this frame
 	ballX = ballX + xDelta
 	ballY = ballY + yDelta
+}
+
+func checkForCollisions() {
+	checkForBallWallCollisions()
+}
+
+func checkForBallWallCollisions() {
+	// did the ball bit the top or the bottom wall or the left or right wall?
+	var playingFieldBottom = float64(windowHeight) - float64(ballH)
+	var playingFieldRight = float64(windowWidth) - float64(ballW)
+	// Check the top first
+	if ballY < 0 { // the top of the wall is a Y cooordinate on the screen
+		// stop the ball from going off the top of the screen
+		ballY = 0.0
+		// yes we hit the top, so reflect the ball back by changing
+		ballDirY = ballDirY * -1
+	} else if ballY > playingFieldBottom {
+		// we hit the bottom so stop the ball from going off the bottom of the
+		// screen
+		ballY = playingFieldBottom
+		// now reflect the ball back
+		ballDirY = ballDirY * -1
+
+	}
+	//check for left wall next
+	if ballX < 0 { // the left edge of the x coordinate of the screen
+		// we hit the left wall
+		// stop the ball from going off the left edge
+		ballX = 0.0
+		// now reflect the ball back
+		ballDirX = ballDirX * -1
+	} else if ballX > playingFieldRight {
+		// we hit the right wall
+		ballX = playingFieldRight
+		// now reflect back
+		ballDirX = ballDirX * -1
+	}
 }
 
 // Render updates the screen, based on the new positions of the bats and the ball.
@@ -435,9 +522,6 @@ func checkQuit() bool {
 		}
 	}
 	return quit
-}
-
-func getPlayersInput() {
 }
 
 // Create the graphics window using the SDl library or crash trying
