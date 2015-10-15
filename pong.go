@@ -32,6 +32,7 @@ var image *sdl.Surface
 
 // myBat is the gaphic used to represent the the players bat
 var myBat *sdl.Texture
+
 // computersBat is the graphic used to represent the computers bat
 var computersBat *sdl.Texture
 var ball *sdl.Texture
@@ -365,6 +366,14 @@ func checkForCollisions() {
 		// the ball hit the players bat, so reflect it along a new direction
 		reflectBallFromPlayersBat()
 	}
+	// check to see if the ball hit the computers bat
+	var computersBatHit bool
+	computersBatHit = checkForBallComputersBatCollisions()
+	if computersBatHit == true {
+		fmt.Println("Hit computers bat")
+		// the ball hit the players bat, so reflect it along a new direction
+		reflectBallFromComputersBat()
+	}
 }
 
 func checkForBallWallCollisions() {
@@ -478,6 +487,78 @@ func reflectBallFromPlayersBat() {
 	// now we know the vector we want to change the balls direction to, we can set it.
 	// The 1 just means the vector always goes to the right
 	setBallDirection(1, scaledReflection)
+}
+
+func checkForBallComputersBatCollisions() bool {
+	// Did the ball collide with the computers bat?
+	// We need to look for an overlap between the bounding box of the ball and the
+	// bounding box of the bat. If we find an overalp we need to return
+	// true, if not we need to return false
+
+	// if the right of the ball is less than the left of the bat - no collision
+	if ballX+float64(ballW) < float64(computersBatX) {
+		return false
+	}
+	// is the left of the ball is greater than the right of the bat - no collision
+	if ballX > float64(computersBatX+computersBatW) {
+		return false
+	}
+	// if the bottom of the ball is less than the top of the bat - no collision
+	if ballY+float64(ballH) < float64(computersBatY) {
+		return false
+	}
+	// if the top of the ball is greater then the bottom of the bat - no collision
+	if ballY > float64(computersBatY+computersBatH) {
+		return false
+	}
+	// otherwise some part of the bat and ball overlap - so there is a collision
+	return true
+}
+
+func reflectBallFromComputersBat() {
+	// The ball has hit the players bat. So make the left most part of the
+	// ball - ballX - line up with the left most part of the bat - myBatX + myBatW
+	ballX = float64(computersBatX)
+	// we need to know where the center of the ball is (in the Y axis) so we
+	// can work out where it hit on the bat.
+	var ballCentreY float64
+	ballCentreY = ballY + float64(ballH/2)
+
+	// Now we need to work out where the ball hit on the bat, the hitpoint.
+	var hitPoint float64
+	hitPoint = ballCentreY
+
+	// clip the hit point so that it is within the bat
+	// If the hitpoint is above the bat, make it the top of thr bat
+	if hitPoint < float64(computersBatY) {
+		hitPoint = float64(computersBatY)
+	} else if hitPoint > float64(computersBatY+computersBatH) {
+		// if the hitpoint is below the bottom of the bat make it the bottomof the bat
+		hitPoint = float64(computersBatY + computersBatH)
+	}
+	// Scale the hitpoint so that it is between zero and the height of the bat.
+	// This is easy we just need to subtract the Y coordinate of the top of the bat.
+	// This in effect translates the hit point to a position relative to the
+	// screens origin.
+	hitPoint = hitPoint - float64(computersBatY)
+	// We want to ensure that everything that hits above the centre line of the bat is
+	// reflected upwards but everything that hits below the centre line is reflected
+	// downwards. When we reflect upwards we want the Y coordinate to be negative
+	// - remeber that a negative change in the Y coordiante moves up the screen -
+	// When we want to go downwards we need a positive change in the Y coordinate.
+	// We can arrange this by simply subtracting half the bats height from the
+	// current value of the hit point. If we hit on the top half of the bat, then
+	// hitpoint will be negative so the ball will be reflected upwards. This is
+	// is exactly what we want.
+	hitPoint = hitPoint - float64(computersBatH/2)
+	// now we need to calcualte the exaclt vector that we need to reflect
+	// the ball along. This is easy we just need to scale the hitpoint so that
+	// it lies between -2.0 and +2.0.
+	var scaledReflection float64
+	scaledReflection = 2.0 * (hitPoint / (float64(computersBatH) / 2.0))
+	// now we know the vector we want to change the balls direction to, we can set it.
+	// The -1 just means the vector always goes to the left
+	setBallDirection(-1, scaledReflection)
 }
 
 // Render updates the screen, based on the new positions of the bats and the ball.
