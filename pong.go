@@ -32,6 +32,8 @@ var image *sdl.Surface
 
 // myBat is the gaphic used to represent the the players bat
 var myBat *sdl.Texture
+// computersBat is the graphic used to represent the computers bat
+var computersBat *sdl.Texture
 var ball *sdl.Texture
 
 // ---- Game State variables ----
@@ -56,9 +58,17 @@ var paused bool
 var myBatX int
 var myBatY int
 
-// my bats width and height. This is the width and height of the grapic in pixels
+// my bats width and height. This is the width and height of the bat graphic in pixels
 var myBatW int
 var myBatH int
+
+// the computers bats x and y position on the screen in pixels
+var computersBatX int
+var computersBatY int
+
+// the computers bats width and height. This is the width and height of the bat graphic in pixels
+var computersBatW int
+var computersBatH int
 
 // the balls x and y position on the screen in pixels
 // We don't store these as int types! We want to know the exact position, so
@@ -130,6 +140,7 @@ func initialise() {
 	// load the game graphics
 	loadGraphics()
 	initialiseMyBatPosition()
+	initialiseComputersBatPosition()
 	initialiseBallPosition()
 	initialiseBallDirection()
 }
@@ -211,6 +222,9 @@ func gameMainLoop() {
 }
 
 func cleanup() {
+	if computersBat != nil {
+		computersBat.Destroy()
+	}
 	if myBat != nil {
 		myBat.Destroy()
 	}
@@ -478,6 +492,7 @@ func render() {
 
 	renderer.Clear()
 	renderMyBat()
+	renderComputersBat()
 	renderBall()
 	// Show the empty window window we have just created.
 	renderer.Present()
@@ -492,12 +507,18 @@ func render() {
 func loadGraphics() {
 	loadMyBatGraphic()
 	setSizeOfMyBat()
+	loadComputersBatGraphic()
+	setSizeOfComputersBat()
 	loadBallGraphic()
 	setSizeOfBall()
 }
 
 func loadMyBatGraphic() {
 	myBat = loadGraphic("./assets/graphics/bat.png")
+}
+
+func loadComputersBatGraphic() {
+	computersBat = loadGraphic("./assets/graphics/bat.png")
 }
 
 func loadBallGraphic() {
@@ -529,6 +550,11 @@ func initialiseMyBatPosition() {
 	myBatY = windowHeight/2 - myBatH/2
 }
 
+func initialiseComputersBatPosition() {
+	computersBatX = windowWidth - (windowWidth / 10) - computersBatW/2
+	computersBatY = windowHeight/2 - myBatH/2
+}
+
 func initialiseBallPosition() {
 	ballX = float64(windowWidth/2 - ballW/2)
 	ballY = float64(windowHeight/2 - ballH/2)
@@ -545,6 +571,19 @@ func setSizeOfMyBat() {
 	}
 	myBatW = int(w)
 	myBatH = int(h)
+}
+
+func setSizeOfComputersBat() {
+	var w, h int32
+	var err error
+	_, _, w, h, err = computersBat.Query()
+	if err != nil {
+		fmt.Print("Failed to query texture: ")
+		fmt.Println(err)
+		panic(err)
+	}
+	computersBatW = int(w)
+	computersBatH = int(h)
 }
 
 func setSizeOfBall() {
@@ -575,6 +614,24 @@ func renderMyBat() {
 	dst.H = int32(myBatH)
 
 	renderer.Copy(myBat, &src, &dst)
+
+}
+
+func renderComputersBat() {
+
+	var src, dst sdl.Rect
+
+	src.X = 0
+	src.Y = 0
+	src.W = int32(computersBatW)
+	src.H = int32(computersBatH)
+
+	dst.X = int32(computersBatX)
+	dst.Y = int32(computersBatY)
+	dst.W = int32(computersBatW)
+	dst.H = int32(computersBatH)
+
+	renderer.Copy(computersBat, &src, &dst)
 
 }
 
