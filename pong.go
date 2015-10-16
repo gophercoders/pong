@@ -45,6 +45,9 @@ var ball *sdl.Texture
 // value of a constant - it's an illegal action - it breaks the rile of go.
 const BallSpeed = 550
 
+// This is the speed of the computers bat, in pixels per second
+const ComputersBatSpeed = 350
+
 // The quit flag this is used to control the main game loop.
 // If quit is true then the user wants to finish the game. This will
 // break the main game loop.
@@ -341,6 +344,9 @@ func isKeyPause(event sdl.Event) bool {
 func updateState() {
 	// update the balls state
 	updateBallState()
+	// move the computer players bat
+	updateComputersBatPosition()
+	// now check for collisions between the ball/walls and the ball/bats
 	checkForCollisions()
 }
 
@@ -354,6 +360,58 @@ func updateBallState() {
 	// the balls new position is the last position + the delta for this frame
 	ballX = ballX + xDelta
 	ballY = ballY + yDelta
+}
+
+// This is the games artifical intelligence.
+// The rules that the move the computers bat are simple:
+//    Chase the ball when it is going towards the AI player.
+//    Only chase the ball when it is on its side of the playing field.
+//    Move towards the center when the ball is moving away from the AI player.
+func updateComputersBatPosition() {
+	// work out the frame time
+	var frameTime = float64(1) / float64(60)
+	// calculate how far the computers bat could have moved in the frame time
+	var deltaY float64
+	deltaY = ComputersBatSpeed * frameTime
+
+	var middleOfBatY float64
+	middleOfBatY = float64(computersBatY) + float64(computersBatH/2)
+	var middleOfBallY float64
+	middleOfBallY = ballY + float64(ballH/2)
+	var middleOfTheScreenY float64
+	middleOfTheScreenY = float64(windowHeight / 2)
+	// if the ball is on the computers half of the screen and the ball is moving
+	// towards the computers bat then we want to move the computers bat towards the ball
+	if ballX > float64(windowWidth/2) && ballDirX > 0 {
+		// if the middle of the bat is above the middle of the ball
+		// we want to move the bat down
+		if middleOfBatY < middleOfBallY {
+			//move the bat down, but the maximum about we can
+			computersBatY = int((float64(computersBatY) + deltaY))
+		} else if middleOfBatY > middleOfBallY {
+			// if the middle of the bat is below the middle of the ball
+			// we want to move move the bat up
+			computersBatY = int(float64(computersBatY) - deltaY)
+		}
+	} else {
+		// move to the center when the ball is far away or moving away
+		// if the bat is above the middle od the screen move down
+		if middleOfBatY < middleOfTheScreenY {
+			computersBatY = int(float64(computersBatY) + deltaY)
+		} else if middleOfBatY > middleOfTheScreenY {
+			// if the bat is below the middle of the screen move up
+			computersBatY = int(float64(computersBatY) - deltaY)
+		}
+	}
+	// check the computers bat has not moved off the screen
+	// Check the top first
+	if computersBatY < 0 {
+		computersBatY = 0
+	}
+	// now check the bottom
+	if computersBatY+computersBatH > windowHeight {
+		computersBatY = windowHeight - computersBatH
+	}
 }
 
 func checkForCollisions() {
@@ -517,8 +575,9 @@ func checkForBallComputersBatCollisions() bool {
 
 func reflectBallFromComputersBat() {
 	// The ball has hit the players bat. So make the left most part of the
-	// ball - ballX - line up with the left most part of the bat - myBatX + myBatW
-	ballX = float64(computersBatX)
+	// ball - ballX - line up with the left most part of the bat - myBatX -
+	// but set back by the balls width
+	ballX = float64(computersBatX - ballW)
 	// we need to know where the center of the ball is (in the Y axis) so we
 	// can work out where it hit on the bat.
 	var ballCentreY float64
