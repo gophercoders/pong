@@ -48,6 +48,9 @@ const BallSpeed = 550
 // This is the speed of the computers bat, in pixels per second
 const ComputersBatSpeed = 350
 
+// This is the number of points a player has to score to win the game
+const WinningScore = 11
+
 // The quit flag this is used to control the main game loop.
 // If quit is true then the user wants to finish the game. This will
 // break the main game loop.
@@ -57,6 +60,13 @@ var quit bool
 // If the paused flag is true then the game is paused. The game will stop moving
 // the ball and both players bats.
 var paused bool
+
+// The game over flag controls how the game ends.
+// If a players score is equal to te WinningScore the game is over so
+// the game over flag is true. When the game over flag is true the AI stops
+// the ball stops moving, and the player cannot move or pause the game.
+// The game over game over flag starts as false
+var gameOver bool
 
 // my bats x and y position on the screen in pixels
 var myBatX int
@@ -90,6 +100,10 @@ var ballH int
 // float64 types not ints.
 var ballDirX float64
 var ballDirY float64
+
+// the scores for each player
+var myScore int
+var computersScore int
 
 // The programs main function
 func main() {
@@ -141,12 +155,19 @@ func initialise() {
 	quit = false
 	// initially the game is not paused
 	paused = false
+	// initially the gmae is not over
+	gameOver = false
+	// The scores start at zero
+	myScore = 0
+	computersScore = 0
 	// load the game graphics
 	loadGraphics()
 	initialiseMyBatPosition()
 	initialiseComputersBatPosition()
 	initialiseBallPosition()
 	initialiseBallDirection()
+
+	printScores()
 }
 
 func initialiseBallDirection() {
@@ -217,12 +238,21 @@ func isOddNumber(number int) bool {
 func gameMainLoop() {
 	for quit == false {
 		getInput()
-		// if the game is not paused, then we must update the games state
-		if paused == false {
-			updateState()
+		// update the game state if the game has not finished.
+		if gameOver == false {
+			// if the game is not paused, then we must update the games state
+			if paused == false {
+				updateState()
+			}
+			render()
+		} else {
+			showGameOver()
 		}
-		render()
 	}
+}
+
+func showGameOver() {
+	fmt.Println("**** Game Over ****")
 }
 
 func cleanup() {
@@ -256,6 +286,11 @@ func getInput() {
 				if paused == true {
 					return
 				}
+				// if the game is in the game over state we must also ignore
+				// the key press
+				if gameOver == true {
+					return
+				}
 				// if the game is not paused we can process the key press
 				myBatY = myBatY - myBatH/4
 				// make sure we do not go off the top of the screen!
@@ -271,6 +306,11 @@ func getInput() {
 				if paused == true {
 					return
 				}
+				// if the game is in the game over state we must also ignore
+				// the key press
+				if gameOver == true {
+					return
+				}
 				// if the game is not paused we can process the key
 				myBatY = myBatY + myBatH/4
 				// make sure we do not go off the bottom of the screen
@@ -282,11 +322,17 @@ func getInput() {
 					myBatY = windowHeight - myBatH
 				}
 			}
-			// We must always respond to the paused key being pressed.
+			// We must always respond to the paused key being pressed - if the
+			// game is not over.
 			// If the game is running the pause key pauses the game.
 			// But if the game is paused, we must still respond to the paused key.
 			// This is the only way to unpause the game.
 			if isKeyPause(event) {
+				// if the game is in the game over state we must also ignore
+				// the key press
+				if gameOver == true {
+					return
+				}
 				if paused == true {
 					paused = false
 				} else {
@@ -454,19 +500,39 @@ func checkForBallWallCollisions() {
 	}
 	//check for left wall next
 	if ballX < 0 { // the left edge of the x coordinate of the screen
-		// we hit the left wall
-		// stop the ball from going off the left edge
-		ballX = 0.0
-		// now reflect the ball back
-		ballDirX = ballDirX * -1
+		// the ball hit the left wall, so the computer scored a point
+		computersScore = computersScore + 1
+		printScores()
+		// now we need to reset the game state so that the ball starts
+		// in the middle again.
+		resetGameState()
+		if computersScore == WinningScore {
+			gameOver = true
+		}
 	} else if ballX > playingFieldRight {
-		// we hit the right wall
-		ballX = playingFieldRight
-		// now reflect back
-		ballDirX = ballDirX * -1
+		// we hit the right wall so the player scored a point
+		myScore = myScore + 1
+		printScores()
+		resetGameState()
+		if myScore == WinningScore {
+			gameOver = true
+		}
 	}
 }
 
+func printScores() {
+	fmt.Printf("Scores: Me %d - %d Computer\n", myScore, computersScore)
+}
+
+func resetGameState() {
+	// We want to reset the gmae state after a point is scored.
+	// So we want to put the ball back in the centre of the screen again
+	// and then "serve" it towrds one of the players.
+	// Set the bals initial poistion
+	initialiseBallPosition()
+	// Now we need to set the balls direction
+	initialiseBallDirection()
+}
 func checkForBallPayersBatCollisions() bool {
 	// Did the ball collide with the players bat?
 	// We need to look for an overlap between the bounding box of the ball and the
