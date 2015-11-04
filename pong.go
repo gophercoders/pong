@@ -6,6 +6,7 @@ import (
 	// window and to provide the drawing functions we need.
 	"fmt"
 	"math"
+	"strconv"
 
 	"github.com/gophercoders/random"
 	"github.com/veandco/go-sdl2/sdl"
@@ -36,6 +37,21 @@ var myBat *sdl.Texture
 // computersBat is the graphic used to represent the computers bat
 var computersBat *sdl.Texture
 var ball *sdl.Texture
+
+// There is one graphic for each score, so one graphic for one, one for two, one for three...
+// We have 12 graphics in total for the numbers 0 to 11 (inclusive). We will always have
+// exactly 12 graphics because the game rules say that the game is over when a players score
+// reaches 11.
+// The natural way to store these grapincs is in an array. You can think of an array as a row of
+// "boxes" in memory. Each box can hold the same "thing" and each box is the same size.
+// Each box is given a number, it's index, starting at ZERO. We can use the index to retreieve the
+// contents of any of the boxes in memory. Each of our boxes is big enough to store one graphic.
+
+// The scoresGfx - 0 to 11 - are stored in an array. We need 12 spaces in the array because we count the zero.
+var scoresGfx [12]*sdl.Texture
+
+// The game over graphic
+var gameOverGfx *sdl.Texture
 
 // ---- Game State variables ----
 
@@ -105,6 +121,26 @@ var ballDirY float64
 var myScore int
 var computersScore int
 
+// the position of my score on the screen in pixels
+var myScoreX int
+var myScoreY int
+
+// the position of the computers score on the screen in pixels
+var computersScoreX int
+var computersScoreY int
+
+// the size of the score graphic in pixels
+var scoreW int
+var scoreH int
+
+// the position of the game over graphic in screen pixels
+var gameOverX int
+var gameOverY int
+
+// the gameOver graphic size
+var gameOverW int
+var gameOverH int
+
 // The programs main function
 func main() {
 	// ---- This is the start of Owen's graphics setup code ----
@@ -166,8 +202,8 @@ func initialise() {
 	initialiseComputersBatPosition()
 	initialiseBallPosition()
 	initialiseBallDirection()
-
-	printScores()
+	initialiseScorePositions()
+	initialiseGameOverPosition()
 }
 
 func initialiseBallDirection() {
@@ -238,21 +274,12 @@ func isOddNumber(number int) bool {
 func gameMainLoop() {
 	for quit == false {
 		getInput()
-		// update the game state if the game has not finished.
-		if gameOver == false {
-			// if the game is not paused, then we must update the games state
-			if paused == false {
-				updateState()
-			}
-			render()
-		} else {
-			showGameOver()
+		// if the game is not paused, then we must update the games state
+		if paused == false {
+			updateState()
 		}
+		render()
 	}
-}
-
-func showGameOver() {
-	fmt.Println("**** Game Over ****")
 }
 
 func cleanup() {
@@ -388,6 +415,10 @@ func isKeyPause(event sdl.Event) bool {
 // UpdateGameState updates the game state variables based on the user input and
 // the rules of the game.
 func updateState() {
+	// if the game has finished we must do nothing
+	if gameOver == true {
+		return
+	}
 	// update the balls state
 	updateBallState()
 	// move the computer players bat
@@ -466,7 +497,6 @@ func checkForCollisions() {
 	var hitPlayersBat bool
 	hitPlayersBat = checkForBallPayersBatCollisions()
 	if hitPlayersBat == true {
-		fmt.Println("Hit players bat")
 		// the ball hit the players bat, so reflect it along a new direction
 		reflectBallFromPlayersBat()
 	}
@@ -474,7 +504,6 @@ func checkForCollisions() {
 	var computersBatHit bool
 	computersBatHit = checkForBallComputersBatCollisions()
 	if computersBatHit == true {
-		fmt.Println("Hit computers bat")
 		// the ball hit the players bat, so reflect it along a new direction
 		reflectBallFromComputersBat()
 	}
@@ -502,7 +531,6 @@ func checkForBallWallCollisions() {
 	if ballX < 0 { // the left edge of the x coordinate of the screen
 		// the ball hit the left wall, so the computer scored a point
 		computersScore = computersScore + 1
-		printScores()
 		// now we need to reset the game state so that the ball starts
 		// in the middle again.
 		resetGameState()
@@ -512,16 +540,11 @@ func checkForBallWallCollisions() {
 	} else if ballX > playingFieldRight {
 		// we hit the right wall so the player scored a point
 		myScore = myScore + 1
-		printScores()
 		resetGameState()
 		if myScore == WinningScore {
 			gameOver = true
 		}
 	}
-}
-
-func printScores() {
-	fmt.Printf("Scores: Me %d - %d Computer\n", myScore, computersScore)
 }
 
 func resetGameState() {
@@ -699,8 +722,15 @@ func render() {
 	renderer.Clear()
 	renderMyBat()
 	renderComputersBat()
-	renderBall()
-	// Show the empty window window we have just created.
+	renderScore()
+	// if the game is over render the gameOver graphic
+	if gameOver == true {
+		renderGameOver()
+	} else {
+		// otherwise we need to draw the ball
+		renderBall()
+	}
+	// Show the game window window.
 	renderer.Present()
 
 	var frameTime uint32
@@ -717,6 +747,10 @@ func loadGraphics() {
 	setSizeOfComputersBat()
 	loadBallGraphic()
 	setSizeOfBall()
+	loadScores()
+	setSizeOfScore()
+	loadGameOverGraphic()
+	setSizeOfGameOverGraphic()
 }
 
 func loadMyBatGraphic() {
@@ -729,6 +763,29 @@ func loadComputersBatGraphic() {
 
 func loadBallGraphic() {
 	ball = loadGraphic("./assets/graphics/ball.png")
+}
+
+func loadScores() {
+	var scoreGfxFilename string
+	var i int
+	for i = 0; i < 12; i++ {
+		// create the score name dynamiclly
+		// The filenames look like this:
+		// ./assets/graphics/1.png or ./assets/graphics/10.png
+		// So we can use the value of the loop counter - i- to help generate the
+		// file name in the loop.
+		// The strconv.Itoa function converts a decimal integer number to a string
+		// the plus - +'s - join the strings together
+		scoreGfxFilename = "./assets/graphics/" + strconv.Itoa(i) + ".png"
+		// load the graphic and store it the i'th position in the scores array
+		// So the first score is at scoresGfx[0] because i started at zero. The next
+		// graphic is at scoresGfx[1] because the next value of i is one.
+		scoresGfx[i] = loadGraphic(scoreGfxFilename)
+	}
+}
+
+func loadGameOverGraphic() {
+	gameOverGfx = loadGraphic("./assets/graphics/GameOver.png")
 }
 
 func loadGraphic(filename string) *sdl.Texture {
@@ -764,6 +821,18 @@ func initialiseComputersBatPosition() {
 func initialiseBallPosition() {
 	ballX = float64(windowWidth/2 - ballW/2)
 	ballY = float64(windowHeight/2 - ballH/2)
+}
+
+func initialiseScorePositions() {
+	myScoreX = windowWidth/4 - scoreW/2
+	myScoreY = windowHeight / 8
+	computersScoreX = (windowWidth/4)*3 - scoreW/2
+	computersScoreY = windowHeight / 8
+}
+
+func initialiseGameOverPosition() {
+	gameOverX = windowWidth/2 - gameOverW/2
+	gameOverY = windowHeight/2 - gameOverH/2
 }
 
 func setSizeOfMyBat() {
@@ -803,6 +872,32 @@ func setSizeOfBall() {
 	}
 	ballW = int(w)
 	ballH = int(h)
+}
+
+func setSizeOfScore() {
+	var w, h int32
+	var err error
+	_, _, w, h, err = scoresGfx[0].Query() // All the score graphics are the same size, so we can use the first one
+	if err != nil {
+		fmt.Print("Failed to query texture: ")
+		fmt.Println(err)
+		panic(err)
+	}
+	scoreW = int(w)
+	scoreH = int(h)
+}
+
+func setSizeOfGameOverGraphic() {
+	var w, h int32
+	var err error
+	_, _, w, h, err = gameOverGfx.Query()
+	if err != nil {
+		fmt.Print("Failed to query texture: ")
+		fmt.Println(err)
+		panic(err)
+	}
+	gameOverW = int(w)
+	gameOverH = int(h)
 }
 
 func renderMyBat() {
@@ -857,6 +952,59 @@ func renderBall() {
 
 	renderer.Copy(ball, &src, &dst)
 
+}
+
+func renderScore() {
+	renderMyScore()
+	renderComputersScore()
+}
+
+func renderMyScore() {
+	var src, dst sdl.Rect
+
+	src.X = 0
+	src.Y = 0
+	src.W = int32(scoreW)
+	src.H = int32(scoreH)
+
+	dst.X = int32(myScoreX)
+	dst.Y = int32(myScoreY)
+	dst.W = int32(scoreW)
+	dst.H = int32(scoreH)
+
+	renderer.Copy(scoresGfx[myScore], &src, &dst)
+}
+
+func renderComputersScore() {
+	var src, dst sdl.Rect
+
+	src.X = 0
+	src.Y = 0
+	src.W = int32(scoreW)
+	src.H = int32(scoreH)
+
+	dst.X = int32(computersScoreX)
+	dst.Y = int32(computersScoreY)
+	dst.W = int32(scoreW)
+	dst.H = int32(scoreH)
+
+	renderer.Copy(scoresGfx[computersScore], &src, &dst)
+}
+
+func renderGameOver() {
+	var src, dst sdl.Rect
+
+	src.X = 0
+	src.Y = 0
+	src.W = int32(gameOverW)
+	src.H = int32(gameOverH)
+
+	dst.X = int32(gameOverX)
+	dst.Y = int32(gameOverY)
+	dst.W = int32(gameOverW)
+	dst.H = int32(gameOverH)
+
+	renderer.Copy(gameOverGfx, &src, &dst)
 }
 
 // CheckQuit checks if the user has clicked the window's close button.
